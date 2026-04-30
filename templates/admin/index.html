@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+function copyLink(url) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => {
+      alert('링크가 클립보드에 복사되었습니다!');
+    }).catch(() => {
+      fallbackCopyToClipboard(url);
+    });
+  } else {
+    fallbackCopyToClipboard(url);
+  }
+}
+
+function fallbackCopyToClipboard(url) {
+  const textarea = document.createElement('textarea');
+  textarea.value = url;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    alert('링크가 클립보드에 복사되었습니다!');
+  } catch (err) {
+    prompt('복사에 실패했습니다. 아래 링크를 수동으로 복사해주세요:', url);
+  }
+  document.body.removeChild(textarea);
+}
+</script>
+
+<div class="topbar">
+  <h1>Kiosk URL Manager</h1>
+  <a href="/admin/new" class="btn btn-primary">새 링크</a>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>슬러그</th>
+        <th>설명</th>
+        <th>앨범 수</th>
+        <th>생성일</th>
+        <th>작업</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for link in links %}
+      <tr>
+        <td>/{{ link.slug }}</td>
+        <td>{{ link.label }}</td>
+        <td>{{ link.get_album_ids()|length }}</td>
+        <td>{{ link.created_at.strftime("%Y-%m-%d %H:%M") if link.created_at else "-" }}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn" onclick="copyLink('{{ short_base_url }}/{{ link.slug }}')">링크 복사</button>
+            <a class="btn" href="/admin/links/{{ link.id }}/edit">수정</a>
+            <button
+              class="btn btn-danger"
+              onclick="if (confirm('정말 삭제할까요?')) { fetch('/admin/links/{{ link.id }}', { method: 'DELETE' }).then(() => location.reload()); }"
+            >삭제</button>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="muted">등록된 링크가 없습니다.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

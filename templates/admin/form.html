@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar">
+  <h1>{{ title }}</h1>
+  <a href="/admin" class="btn">목록으로</a>
+</div>
+
+<script>
+window.kioskFormConfig = {
+  initialSlug: {{ (link.slug if link else '')|tojson }},
+  initialLabel: {{ (link.label if link else '')|tojson }},
+  selectedAlbumIds: {{ selected_album_ids|tojson }},
+  initialOptions: {{ options|tojson }},
+  baseKioskUrl: {{ base_kiosk_url|tojson }},
+  actionUrl: {{ action_url|tojson }},
+  method: {{ method|tojson }}
+};
+
+function kioskForm(config) {
+  const knownOptionKeys = new Set(['duration', 'layout', 'image_fit', 'image_effect', 'show_album_name']);
+  const initialOptions = config.initialOptions || {};
+
+  return {
+    slug: config.initialSlug,
+    label: config.initialLabel,
+    slugError: '',
+    albums: [],
+    loadingAlbums: true,
+    albumSearch: '',
+    selectedAlbumIds: Array.isArray(config.selectedAlbumIds) ? config.selectedAlbumIds : [],
+    duration: String(initialOptions.duration || '15'),
+    layout: String(initialOptions.layout || 'default'),
+    imageFit: String(initialOptions.image_fit || 'default'),
+    imageEffect: String(initialOptions.image_effect || 'default'),
+    showAlbumName: String(initialOptions.show_album_name || 'default'),
+    options: Object.entries(initialOptions)
+      .filter(([k]) => !knownOptionKeys.has(String(k)))
+      .map(([k, v]) => ({ key: String(k), value: String(v) })),
+    baseKioskUrl: config.baseKioskUrl,
+    actionUrl: config.actionUrl,
+    method: config.method,
+
+    validateSlug() {
+      const slugPattern = /^[a-z0-9-]+$/;
+      const trimmedSlug = (this.slug || '').trim().toLowerCase();
+      
+      if (!trimmedSlug) {
+        this.slugError = '슬러그는 필수입니다.';
+      } else if (!slugPattern.test(trimmedSlug)) {
+        this.slugError = '영문 소문자, 숫자, 하이픈(-)만 허용됩니다.';
+      } else {
+        this.slugError = '';
+      }
+    },
+
+    get previewUrl() {
+      const query = new URLSearchParams();
+      this.selectedAlbumIds.forEach(id => query.append('album', id));
+
+      const duration = (this.duration || '').trim();
+      if (duration) {
+        query.append('duration', duration);
+      }
+
+      if (this.layout && this.layout !== 'default') {
+        query.append('layout', this.layout);
+      }
+      if (this.imageFit && this.imageFit !== 'default') {
+        query.append('image_fit', this.imageFit);
+      }
+      if (this.imageEffect && this.imageEffect !== 'default') {
+        query.append('image_effect', this.imageEffect);
+      }
+      if (this.showAlbumName && this.showAlbumName !== 'default') {
+        query.append('show_album_name', this.showAlbumName);
+      }
+
+      this.options.forEach(opt => {
+        const k = (opt.key || '').trim();
+        const v = (opt.value || '').trim();
+        if (k && v) {
+          query.append(k, v);
+        }
+      });
+      const qs = query.toString();
+      return qs ? `${this.baseKioskUrl}/?${qs}` : `${this.baseKioskUrl}/`;
+    },
+
+    get sortedAlbums() {
+      const selectedSet = new Set((this.selectedAlbumIds || []).map(String));
+      return [...this.albums].sort((a, b) => {
+        const aSelected = selectedSet.has(String(a.id));
+        const bSelected = selectedSet.has(String(b.id));
+
+        if (aSelected !== bSelected) {
+          return aSelected ? -1 : 1;
+        }
+
+        const aName = String(a.albumName || '');
+        const bName = String(b.albumName || '');
+        return aName.localeCompare(bName, 'ko', { numeric: true, sensitivity: 'base' });
+      });
+    },
+
+    get filteredAlbums() {
+      const keyword = (this.albumSearch || '').trim().toLowerCase();
+      if (!keyword) {
+        return this.sortedAlbums;
+      }
+
+      return this.sortedAlbums.filter((album) => {
+        const name = String(album.albumName || '').toLowerCase();
+        return name.includes(keyword);
+      });
+    },
+
+    init() {
+      console.log('init called with config:', window.kioskFormConfig);
+      this.loadAlbums();
+    },
+
+    async loadAlbums() {
+      try {
+        const res = await fetch('/api/albums');
+        const data = await res.json();
+        console.log('Albums response:', data);
+        this.albums = data.albums || [];
+        console.log('Loaded albums:', this.albums);
+      } catch (err) {
+        console.error('Failed to load albums:', err);
+        this.albums = [];
+      } finally {
+        this.loadingAlbums = false;
+      }
+    },
+
+    addOption() {
+      this.options.push({ key: '', value: '' });
+    },
+
+    removeOption(idx) {
+      this.options.splice(idx, 1);
+    },
+
+    async submitForm() {
+      this.validateSlug();
+      if (this.slugError) {
+        alert(this.slugError);
+        return;
+      }
+
+      const label = (this.label || '').trim();
+      if (!label) {
+        alert('설명을 입력해주세요.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('slug', (this.slug || '').trim().toLowerCase());
+      formData.append('label', label);
+      this.selectedAlbumIds.forEach(id => formData.append('album_ids', id));
+
+      const duration = (this.duration || '').trim();
+      if (duration) {
+        formData.append('option_keys', 'duration');
+        formData.append('option_values', duration);
+      }
+      if (this.layout && this.layout !== 'default') {
+        formData.append('option_keys', 'layout');
+        formData.append('option_values', this.layout);
+      }
+      if (this.imageFit && this.imageFit !== 'default') {
+        formData.append('option_keys', 'image_fit');
+        formData.append('option_values', this.imageFit);
+      }
+      if (this.imageEffect && this.imageEffect !== 'default') {
+        formData.append('option_keys', 'image_effect');
+        formData.append('option_values', this.imageEffect);
+      }
+      if (this.showAlbumName && this.showAlbumName !== 'default') {
+        formData.append('option_keys', 'show_album_name');
+        formData.append('option_values', this.showAlbumName);
+      }
+
+      this.options.forEach(opt => {
+        formData.append('option_keys', (opt.key || '').trim());
+        formData.append('option_values', (opt.value || '').trim());
+      });
+
+      const response = await fetch(this.actionUrl, {
+        method: this.method,
+        body: formData,
+      });
+
+      if (response.redirected) {
+        window.location.href = response.url;
+        return;
+      }
+
+      if (response.ok) {
+        window.location.href = '/admin';
+        return;
+      }
+
+      let message = '저장에 실패했습니다.';
+      try {
+        const data = await response.json();
+        message = data.detail || message;
+      } catch (e) {
+      }
+      alert(message);
+    },
+  };
+}
+</script>
+
+<div class="card" x-data="kioskForm(window.kioskFormConfig)" x-init="init()">
+
+  <form @submit.prevent="submitForm">
+    <div class="field">
+      <label>실시간 미리보기</label>
+      <div class="preview" x-text="previewUrl"></div>
+    </div>
+
+    <div class="grid grid-2">
+      <div>
+        <div class="field">
+          <label for="slug">슬러그</label>
+          <input id="slug" type="text" x-model="slug" placeholder="mom, family, living-room" required @blur="validateSlug()">
+          <div class="muted">영문 소문자, 숫자, 하이픈(-)만 허용</div>
+          <div x-show="slugError" class="muted" style="color: #d14343;" x-text="slugError"></div>
+        </div>
+
+        <div class="field">
+          <label for="label">설명</label>
+          <input id="label" type="text" x-model="label" placeholder="거실 TV용 가족 앨범" required>
+        </div>
+
+        <div class="field">
+          <label for="duration">재생 시간 (duration)</label>
+          <input id="duration" type="number" min="1" step="1" x-model="duration" placeholder="15">
+        </div>
+
+        <div class="field">
+          <label for="layout">레이아웃 (layout)</label>
+          <select id="layout" x-model="layout">
+            <option value="default">default</option>
+            <option value="single">single</option>
+            <option value="portrait">portrait</option>
+            <option value="landscape">landscape</option>
+            <option value="splitview">splitview</option>
+            <option value="splitview-landscape">splitview-landscape</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>이미지 맞춤 (image_fit)</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" value="default" x-model="imageFit">Default</label>
+            <label class="radio-item"><input type="radio" value="none" x-model="imageFit">None</label>
+            <label class="radio-item"><input type="radio" value="contain" x-model="imageFit">Contain</label>
+            <label class="radio-item"><input type="radio" value="cover" x-model="imageFit">Cover</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>이미지 효과 (image_effect)</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" value="default" x-model="imageEffect">Default</label>
+            <label class="radio-item"><input type="radio" value="none" x-model="imageEffect">None</label>
+            <label class="radio-item"><input type="radio" value="zoom" x-model="imageEffect">Zoom</label>
+            <label class="radio-item"><input type="radio" value="smart-zoom" x-model="imageEffect">Smart-Zoom</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>앨범명 표시 (show_album_name)</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" value="default" x-model="showAlbumName">Default</label>
+            <label class="radio-item"><input type="radio" value="true" x-model="showAlbumName">True</label>
+            <label class="radio-item"><input type="radio" value="false" x-model="showAlbumName">False</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>추가 옵션 (고급)</label>
+          <template x-for="(opt, idx) in options" :key="idx">
+            <div class="option-row">
+              <input type="text" x-model="opt.key" placeholder="key (duration)">
+              <input type="text" x-model="opt.value" placeholder="value (15)">
+              <button type="button" class="btn" @click="removeOption(idx)">삭제</button>
+            </div>
+          </template>
+          <button type="button" class="btn" @click="addOption">옵션 추가</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="field">
+          <label>앨범 선택</label>
+          <input type="text" x-model="albumSearch" placeholder="앨범 이름 검색" style="margin-bottom: 10px;">
+          <div class="albums">
+            <template x-if="loadingAlbums">
+              <div class="muted">앨범 불러오는 중...</div>
+            </template>
+            <template x-if="!loadingAlbums && albums.length === 0">
+              <div class="muted">앨범이 없거나 조회에 실패했습니다.</div>
+            </template>
+            <template x-if="!loadingAlbums && albums.length > 0 && filteredAlbums.length === 0">
+              <div class="muted">검색 결과가 없습니다.</div>
+            </template>
+            <template x-for="album in filteredAlbums" :key="album.id">
+              <label class="album-item">
+                <input type="checkbox" :value="album.id" x-model="selectedAlbumIds">
+                <span x-text="`${album.albumName} (${album.assetCount})`"></span>
+              </label>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row-actions">
+      <button class="btn btn-primary" type="submit">저장</button>
+      <a href="/admin" class="btn">취소</a>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
