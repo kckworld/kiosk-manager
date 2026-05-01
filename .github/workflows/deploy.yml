@@ -44,4 +44,4 @@ jobs:
 
       - name: Pull and restart on NAS
         run: |
-          ssh ssh.kckworld.com "cd /volume1/docker/immich && docker compose pull kiosk-manager && docker compose up -d kiosk-manager"
+          ssh ssh.kckworld.com "cd /volume1/docker/immich && sudo /usr/local/bin/docker compose pull kiosk-manager && sudo /usr/local/bin/docker compose up -d kiosk-manager"
