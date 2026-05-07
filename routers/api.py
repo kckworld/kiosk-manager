@@ -2,6 +2,7 @@ import asyncio
 from typing import Any, Dict
 
 import asyncpg
+import docker
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 
@@ -125,17 +126,19 @@ WHERE latitude IS NOT NULL;
 
 @router.post("/geocoding/run")
 async def run_geocoding() -> Dict[str, Any]:
-    command = (
-        "docker compose -f /volume1/docker/immich/docker-compose.yml "
-        "exec -T immich-naver-reverse-geocoding node updater.js"
-    )
+    def _run_docker_command() -> None:
+        try:
+            client = docker.DockerClient(base_url="unix:///var/run/docker.sock")
+            container = client.containers.get("immich_naver_reverse_geocoding")
+            container.exec_run("node updater.js", detach=True)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to start geocoding job: {str(exc)}") from exc
 
+    loop = asyncio.get_event_loop()
     try:
-        await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        await loop.run_in_executor(None, _run_docker_command)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Failed to start geocoding job") from exc
 
