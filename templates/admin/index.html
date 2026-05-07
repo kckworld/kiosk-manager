@@ -28,11 +28,119 @@ function fallbackCopyToClipboard(url) {
   }
   document.body.removeChild(textarea);
 }
+
+function adminPanel() {
+  return {
+    geocodingStatus: {
+      converted: 0,
+      pending: 0,
+      total: 0,
+    },
+    loadingStatus: false,
+    runningGeocoding: false,
+    runningLibraryScan: false,
+
+    init() {
+      this.refreshGeocodingStatus();
+    },
+
+    async refreshGeocodingStatus() {
+      this.loadingStatus = true;
+      try {
+        const response = await fetch('/api/geocoding/status');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || '역지오코딩 현황 조회에 실패했습니다.');
+        }
+        this.geocodingStatus = {
+          converted: Number(data.converted || 0),
+          pending: Number(data.pending || 0),
+          total: Number(data.total || 0),
+        };
+      } catch (err) {
+        alert(err.message || '역지오코딩 현황 조회 중 오류가 발생했습니다.');
+      } finally {
+        this.loadingStatus = false;
+      }
+    },
+
+    async runGeocoding() {
+      this.runningGeocoding = true;
+      try {
+        const response = await fetch('/api/geocoding/run', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || '역지오코딩 실행에 실패했습니다.');
+        }
+        alert(data.message || '역지오코딩 시작됨');
+      } catch (err) {
+        alert(err.message || '역지오코딩 실행 중 오류가 발생했습니다.');
+      } finally {
+        this.runningGeocoding = false;
+      }
+    },
+
+    async runLibraryScan() {
+      this.runningLibraryScan = true;
+      try {
+        const response = await fetch('/api/library/scan', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || '외부 라이브러리 재탐색 실행에 실패했습니다.');
+        }
+        alert(data.message || '외부 라이브러리 재탐색 시작됨');
+      } catch (err) {
+        alert(err.message || '외부 라이브러리 재탐색 실행 중 오류가 발생했습니다.');
+      } finally {
+        this.runningLibraryScan = false;
+      }
+    },
+  };
+}
 </script>
 
 <div class="topbar">
   <h1>Kiosk URL Manager</h1>
   <a href="/admin/new" class="btn btn-primary">새 링크</a>
+</div>
+
+<div class="card" x-data="adminPanel()" x-init="init()">
+  <div class="row-actions" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <strong>관리</strong>
+    <button class="btn" type="button" @click="refreshGeocodingStatus" :disabled="loadingStatus" x-text="loadingStatus ? '조회 중...' : '새로고침'"></button>
+  </div>
+
+  <div class="grid" style="margin-bottom: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+    <div class="field">
+      <label>변환완료 건수</label>
+      <div class="preview" x-text="geocodingStatus.converted"></div>
+    </div>
+    <div class="field">
+      <label>미변환 건수</label>
+      <div class="preview" x-text="geocodingStatus.pending"></div>
+    </div>
+    <div class="field">
+      <label>전체 건수</label>
+      <div class="preview" x-text="geocodingStatus.total"></div>
+    </div>
+  </div>
+
+  <div class="row-actions">
+    <button
+      class="btn btn-primary"
+      type="button"
+      @click="runGeocoding"
+      :disabled="runningGeocoding"
+      x-text="runningGeocoding ? '실행 중...' : '역지오코딩 실행'"
+    ></button>
+    <button
+      class="btn"
+      type="button"
+      @click="runLibraryScan"
+      :disabled="runningLibraryScan"
+      x-text="runningLibraryScan ? '실행 중...' : '외부 라이브러리 재탐색'"
+    ></button>
+  </div>
 </div>
 
 <div class="card">

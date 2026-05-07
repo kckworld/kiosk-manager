@@ -1,5 +1,7 @@
+import asyncio
 from typing import Any, Dict
 
+import asyncpg
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 
@@ -80,4 +82,90 @@ async def debug_albums_raw(request: Request) -> Dict[str, Any]:
                 "immich_api_key": "***"
             }
         }
+
+
+@router.get("/geocoding/status")
+async def get_geocoding_status(request: Request) -> Dict[str, int]:
+    settings = request.app.state.settings
+    query = """
+SELECT
+  COUNT(*) FILTER (WHERE country = '대한민국') AS converted,
+  COUNT(*) FILTER (WHERE country IS NULL OR country = 'South Korea' OR country = 'Korea') AS pending,
+  COUNT(*) AS total
+FROM asset_exif
+WHERE latitude IS NOT NULL;
+"""
+
+    conn = None
+    try:
+        conn = await asyncpg.connect(
+            host=settings.db_host,
+            port=settings.db_port,
+            database=settings.db_name,
+            user=settings.db_user,
+            password=settings.db_password,
+            timeout=10,
+        )
+        row = await conn.fetchrow(query)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Failed to query geocoding status") from exc
+    finally:
+        if conn is not None:
+            await conn.close()
+
+    if row is None:
+        return {"converted": 0, "pending": 0, "total": 0}
+
+    return {
+        "converted": int(row.get("converted") or 0),
+        "pending": int(row.get("pending") or 0),
+        "total": int(row.get("total") or 0),
+    }
+
+
+@router.post("/geocoding/run")
+async def run_geocoding() -> Dict[str, Any]:
+    command = (
+        "docker compose -f /volume1/docker/immich/docker-compose.yml "
+        "exec -T immich-naver-reverse-geocoding node updater.js"
+    )
+
+    try:
+        await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to start geocoding job") from exc
+
+    return {"ok": True, "message": "역지오코딩 시작됨"}
+
+
+@router.post("/library/scan")
+async def run_library_scan(request: Request) -> Dict[str, Any]:
+    settings = request.app.state.settings
+    if not settings.immich_api_key:
+        raise HTTPException(status_code=500, detail="IMMICH_API_KEY is missing")
+
+    url = f"{settings.immich_url}/api/jobs/library/command"
+    headers = {"x-api-key": settings.immich_api_key}
+    payload = {"command": "start", "force": False}
+
+    try:
+        async with httpx.AsyncClient(timeout=20, verify=False) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        error_msg = f"Immich API error {exc.response.status_code}"
+        try:
+            error_detail = exc.response.json()
+            error_msg += f": {error_detail}"
+        except Exception:
+            error_msg += f": {exc.response.text[:200]}"
+        raise HTTPException(status_code=502, detail=error_msg) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to connect to Immich: {str(exc)[:200]}") from exc
+
+    return {"ok": True, "message": "외부 라이브러리 재탐색 시작됨"}
 

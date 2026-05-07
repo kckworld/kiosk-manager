@@ -19,6 +19,11 @@ class Settings:
         self.base_kiosk_url = os.getenv("BASE_KIOSK_URL", "https://your-kiosk-url.com").rstrip("/")
         self.base_short_url = os.getenv("BASE_SHORT_URL", "https://your-short-url.com").rstrip("/")
         self.database_url = os.getenv("DATABASE_URL", "sqlite:///./data/kiosk_links.db")
+        self.db_host = os.getenv("DB_HOST", "127.0.0.1")
+        self.db_port = int(os.getenv("DB_PORT", "15432"))
+        self.db_name = os.getenv("DB_NAME", "immich")
+        self.db_user = os.getenv("DB_USER", "immich")
+        self.db_password = os.getenv("DB_PASSWORD", "immich")
 
 
 settings = Settings()

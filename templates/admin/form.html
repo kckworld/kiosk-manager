@@ -17,7 +17,7 @@ window.kioskFormConfig = {
 };
 
 function kioskForm(config) {
-  const knownOptionKeys = new Set(['duration', 'layout', 'image_fit', 'image_effect', 'show_album_name']);
+  const knownOptionKeys = new Set(['duration', 'layout', 'image_fit', 'image_effect', 'show_album_name', 'weather']);
   const initialOptions = config.initialOptions || {};
 
   return {
@@ -33,6 +33,7 @@ function kioskForm(config) {
     imageFit: String(initialOptions.image_fit || 'default'),
     imageEffect: String(initialOptions.image_effect || 'default'),
     showAlbumName: String(initialOptions.show_album_name || 'default'),
+    weather: String(initialOptions.weather || 'default'),
     options: Object.entries(initialOptions)
       .filter(([k]) => !knownOptionKeys.has(String(k)))
       .map(([k, v]) => ({ key: String(k), value: String(v) })),
@@ -73,6 +74,9 @@ function kioskForm(config) {
       }
       if (this.showAlbumName && this.showAlbumName !== 'default') {
         query.append('show_album_name', this.showAlbumName);
+      }
+      if (this.weather && this.weather !== 'default') {
+        query.append('weather', this.weather);
       }
 
       this.options.forEach(opt => {
@@ -181,6 +185,10 @@ function kioskForm(config) {
         formData.append('option_keys', 'show_album_name');
         formData.append('option_values', this.showAlbumName);
       }
+      if (this.weather && this.weather !== 'default') {
+        formData.append('option_keys', 'weather');
+        formData.append('option_values', this.weather);
+      }
 
       this.options.forEach(opt => {
         formData.append('option_keys', (opt.key || '').trim());
@@ -279,6 +287,15 @@ function kioskForm(config) {
             <label class="radio-item"><input type="radio" value="default" x-model="showAlbumName">Default</label>
             <label class="radio-item"><input type="radio" value="true" x-model="showAlbumName">True</label>
             <label class="radio-item"><input type="radio" value="false" x-model="showAlbumName">False</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>날씨 위치 (weather)</label>
+          <div class="radio-group">
+            <label class="radio-item"><input type="radio" value="default" x-model="weather">Default</label>
+            <label class="radio-item"><input type="radio" value="성남" x-model="weather">성남</label>
+            <label class="radio-item"><input type="radio" value="동탄" x-model="weather">동탄</label>
           </div>
         </div>
 
