@@ -148,14 +148,28 @@ async def run_library_scan(request: Request) -> Dict[str, Any]:
     if not settings.immich_api_key:
         raise HTTPException(status_code=500, detail="IMMICH_API_KEY is missing")
 
-    url = f"{settings.immich_url}/api/jobs/library/command"
     headers = {"x-api-key": settings.immich_api_key}
-    payload = {"command": "start", "force": False}
+    libraries_url = f"{settings.immich_url}/api/libraries"
 
     try:
         async with httpx.AsyncClient(timeout=20, verify=False) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
+            libraries_response = await client.get(libraries_url, headers=headers)
+            libraries_response.raise_for_status()
+
+            libraries_data = libraries_response.json()
+            if not isinstance(libraries_data, list) or not libraries_data:
+                raise HTTPException(status_code=404, detail="No libraries found")
+
+            first_library = libraries_data[0]
+            if not isinstance(first_library, dict) or not first_library.get("id"):
+                raise HTTPException(status_code=502, detail="Invalid library response from Immich")
+
+            library_id = str(first_library["id"])
+            scan_url = f"{settings.immich_url}/api/libraries/{library_id}/scan"
+            scan_response = await client.post(scan_url, headers=headers, json={})
+            scan_response.raise_for_status()
+    except HTTPException:
+        raise
     except httpx.HTTPStatusError as exc:
         error_msg = f"Immich API error {exc.response.status_code}"
         try:
