@@ -1,5 +1,4 @@
 import asyncio
-import subprocess
 from typing import Any, Dict
 
 import asyncpg
@@ -127,11 +126,37 @@ WHERE latitude IS NOT NULL;
 @router.post("/geocoding/run")
 async def run_geocoding() -> Dict[str, Any]:
     try:
-        subprocess.Popen(
-            ["docker", "exec", "immich_naver_reverse_geocoding", "node", "updater.js"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(uds="/var/run/docker.sock"),
+            timeout=10,
+        ) as client:
+            create_response = await client.post(
+                "http://localhost/containers/immich_naver_reverse_geocoding/exec",
+                json={
+                    "AttachStdout": False,
+                    "AttachStderr": False,
+                    "Cmd": ["node", "updater.js"],
+                },
+            )
+            create_response.raise_for_status()
+
+            exec_id = create_response.json().get("Id")
+            if not exec_id:
+                raise ValueError("No exec ID returned from Docker API")
+
+            start_response = await client.post(
+                f"http://localhost/exec/{exec_id}/start",
+                json={"Detach": True},
+            )
+            start_response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        error_msg = f"Docker API error {exc.response.status_code}"
+        try:
+            error_detail = exc.response.json()
+            error_msg += f": {error_detail}"
+        except Exception:
+            error_msg += f": {exc.response.text[:200]}"
+        raise HTTPException(status_code=502, detail=error_msg) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to start geocoding job: {str(exc)}") from exc
 
