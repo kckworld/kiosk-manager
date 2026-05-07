@@ -90,7 +90,7 @@ async def get_geocoding_status(request: Request) -> Dict[str, int]:
     query = """
 SELECT
   COUNT(*) FILTER (WHERE country = '대한민국') AS converted,
-  COUNT(*) FILTER (WHERE country IS NULL OR country = 'South Korea' OR country = 'Korea') AS pending,
+    COUNT(*) FILTER (WHERE country IS NULL OR country IN ('South Korea', 'Korea')) AS pending,
   COUNT(*) AS total
 FROM asset_exif
 WHERE latitude IS NOT NULL;
