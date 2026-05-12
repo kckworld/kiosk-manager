@@ -51,10 +51,14 @@ jobs:
             sudo /usr/local/bin/docker pull kck9010/kiosk-manager:test &&
             sudo /usr/local/bin/docker stop kiosk-manager-test 2>/dev/null || true &&
             sudo /usr/local/bin/docker rm kiosk-manager-test 2>/dev/null || true &&
+            mkdir -p /volume1/docker/immich/kiosk-manager-test/data &&
             sudo /usr/local/bin/docker run -d \
               --name kiosk-manager-test \
               --restart unless-stopped \
-              -p 8889:8888 \
-              -v /volume1/docker/immich/kiosk-manager-data:/data \
+              -p 8889:8000 \
+              -v /volume1/docker/immich/kiosk-manager-test/data:/app/data \
+              -v /volume1/docker/immich/kiosk-manager/static:/app/static \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              --env-file /volume1/docker/immich/kiosk-manager/.env \
               kck9010/kiosk-manager:test
           "
