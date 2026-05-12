@@ -58,6 +58,8 @@ jobs:
               -p 8889:8000 \
               -v kiosk-manager-test-data:/app/data \
               -v /var/run/docker.sock:/var/run/docker.sock \
+              --add-host=host.docker.internal:host-gateway \
               $([ -f /volume1/docker/immich/kiosk-manager/.env ] && echo "--env-file /volume1/docker/immich/kiosk-manager/.env") \
+              -e DB_HOST=host.docker.internal \
               kck9010/kiosk-manager:test
           "
