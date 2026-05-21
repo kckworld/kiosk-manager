@@ -1,3 +1,4 @@
+import os
 import re
 from datetime import datetime, timezone
 from typing import Dict, List
@@ -10,6 +11,21 @@ from models import KioskLink, get_session
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 SLUG_PATTERN = re.compile(r"^[a-z0-9-]+$")
+
+_PASSWORD = os.getenv("KIOSK_ADMIN_PASSWORD", "")
+
+
+def _auth_check(request: Request) -> None:
+    """Depends용 인증 체커. 실패 시 /admin/login 으로 redirect."""
+    if not _PASSWORD:
+        return
+    if request.cookies.get("kiosk_admin", "") == f"ok:{_PASSWORD}":
+        return
+    raise HTTPException(
+        status_code=status.HTTP_302_FOUND,
+        headers={"location": "/admin/login"},
+        detail="Unauthorized",
+    )
 
 
 def _parse_options(keys: List[str], values: List[str]) -> Dict[str, str]:
@@ -31,8 +47,48 @@ def _validate_slug(slug: str) -> str:
     return value
 
 
+@router.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, error: str = "") -> HTMLResponse:
+    templates = request.app.state.templates
+    return templates.TemplateResponse(
+        "admin/login.html",
+        {
+            "request": request,
+            "has_password": bool(_PASSWORD),
+            "error": error == "1",
+        },
+    )
+
+
+@router.post("/login")
+def login(
+    request: Request,
+    pw: str = Form(default=""),
+    remember: str = Form(default=""),
+) -> RedirectResponse:
+    if not _PASSWORD:
+        return RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+    if pw == _PASSWORD:
+        max_age = 30 * 24 * 3600 if remember == "1" else 12 * 3600
+        resp = RedirectResponse(url="/admin", status_code=status.HTTP_302_FOUND)
+        resp.set_cookie(
+            "kiosk_admin",
+            f"ok:{_PASSWORD}",
+            max_age=max_age,
+            httponly=True,
+            samesite="lax",
+            secure=request.url.scheme == "https",
+        )
+        return resp
+    return RedirectResponse(url="/admin/login?error=1", status_code=status.HTTP_302_FOUND)
+
+
 @router.get("", response_class=HTMLResponse)
-def admin_index(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+def admin_index(
+    request: Request,
+    session: Session = Depends(get_session),
+    _: None = Depends(_auth_check),
+) -> HTMLResponse:
     templates = request.app.state.templates
     settings = request.app.state.settings
     links = session.exec(select(KioskLink).order_by(KioskLink.id.desc())).all()
@@ -49,7 +105,10 @@ def admin_index(request: Request, session: Session = Depends(get_session)) -> HT
 
 
 @router.get("/new", response_class=HTMLResponse)
-def admin_new(request: Request) -> HTMLResponse:
+def admin_new(
+    request: Request,
+    _: None = Depends(_auth_check),
+) -> HTMLResponse:
     templates = request.app.state.templates
     settings = request.app.state.settings
     return templates.TemplateResponse(
@@ -70,12 +129,14 @@ def admin_new(request: Request) -> HTMLResponse:
 
 @router.post("/links")
 def create_link(
+    request: Request,
     slug: str = Form(...),
     label: str = Form(...),
     album_ids: List[str] = Form(default=[]),
     option_keys: List[str] = Form(default=[]),
     option_values: List[str] = Form(default=[]),
     session: Session = Depends(get_session),
+    _: None = Depends(_auth_check),
 ) -> RedirectResponse:
     clean_slug = _validate_slug(slug)
     if session.exec(select(KioskLink).where(KioskLink.slug == clean_slug)).first():
@@ -91,7 +152,12 @@ def create_link(
 
 
 @router.get("/links/{id}/edit", response_class=HTMLResponse)
-def admin_edit(id: int, request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+def admin_edit(
+    id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    _: None = Depends(_auth_check),
+) -> HTMLResponse:
     templates = request.app.state.templates
     settings = request.app.state.settings
 
@@ -118,12 +184,14 @@ def admin_edit(id: int, request: Request, session: Session = Depends(get_session
 @router.put("/links/{id}")
 def update_link(
     id: int,
+    request: Request,
     slug: str = Form(...),
     label: str = Form(...),
     album_ids: List[str] = Form(default=[]),
     option_keys: List[str] = Form(default=[]),
     option_values: List[str] = Form(default=[]),
     session: Session = Depends(get_session),
+    _: None = Depends(_auth_check),
 ) -> RedirectResponse:
     link = session.get(KioskLink, id)
     if not link:
@@ -146,7 +214,12 @@ def update_link(
 
 
 @router.delete("/links/{id}")
-def delete_link(id: int, session: Session = Depends(get_session)) -> Dict[str, bool]:
+def delete_link(
+    id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    _: None = Depends(_auth_check),
+) -> Dict[str, bool]:
     link = session.get(KioskLink, id)
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="display:grid;place-items:center;min-height:70vh;">
+  <div class="card" style="width:min(92vw,420px);padding:32px;">
+
+    <h2 style="margin:0 0 6px;font-size:20px;">관리자 로그인</h2>
+    <p style="margin:0 0 20px;color:var(--muted);font-size:14px;">
+      관리 기능에 접근하려면 비밀번호를 입력하세요.
+    </p>
+
+    {% if not has_password %}
+      <div style="padding:10px 12px;background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;font-size:14px;color:#8a6700;margin-bottom:16px;">
+        <strong>KIOSK_ADMIN_PASSWORD</strong> 환경변수가 설정되지 않아 인증 없이 접근됩니다.
+      </div>
+      <a href="/admin" class="btn btn-primary" style="display:block;text-align:center;text-decoration:none;">
+        관리 페이지로 이동
+      </a>
+
+    {% else %}
+      {% if error %}
+        <div style="padding:10px 12px;background:#fff1f0;border:1px solid #ffccc7;border-radius:8px;font-size:14px;color:#a8071a;margin-bottom:16px;">
+          비밀번호가 올바르지 않습니다.
+        </div>
+      {% endif %}
+
+      <form method="post" action="/admin/login" autocomplete="on">
+        <div style="margin-bottom:14px;">
+          <label for="pw" style="display:block;font-size:13px;color:var(--muted);margin-bottom:6px;">비밀번호</label>
+          <input
+            id="pw"
+            type="password"
+            name="pw"
+            autocomplete="current-password"
+            required
+            style="width:100%;height:40px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:14px;outline:none;transition:border .15s;"
+            onfocus="this.style.borderColor='var(--primary)'"
+            onblur="this.style.borderColor='var(--border)'"
+          >
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;margin-bottom:18px;user-select:none;">
+          <input type="checkbox" name="remember" value="1" style="width:15px;height:15px;cursor:pointer;">
+          로그인 상태 유지
+          <span style="font-size:12px;color:var(--muted);">(체크: 30일 / 미체크: 12시간)</span>
+        </label>
+
+        <button
+          type="submit"
+          style="width:100%;height:40px;border:0;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s;"
+          onmouseover="this.style.opacity='.85'"
+          onmouseout="this.style.opacity='1'"
+        >
+          로그인
+        </button>
+      </form>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
